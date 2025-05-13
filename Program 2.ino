@@ -1,82 +1,83 @@
-// Arduino Calculator - Arduino Side
-// Tested on Arduino Nano
-// Receives math operations over Serial, calculates and returns result
+// Arduino Calculator in pure C (no C++ features)
 
 void setup() {
   Serial.begin(9600); // Start serial communication at 9600 baud
 }
 
-// Helper function: skips leading spaces
-char* skipSpaces(char* str) {
+// Helper: skip leading spaces
+char* skip_spaces(char* str) {
   while (*str == ' ') str++;
   return str;
 }
 
-// Main loop: waits for input, processes it
-void loop() {
-  if (Serial.available()) {
-    String input = Serial.readStringUntil('\n'); // Read until newline character
-    input.trim();                                // Remove any leading/trailing whitespace
+// Parses a math operation string like "10 + 5"
+int parse_input(char* input, int* num1, char* op, int* num2) {
+  char* ptr = skip_spaces(input);
+  char* endptr;
 
-    int firstNumber = 0;
-    int secondNumber = 0;
-    char operatorChar = 0;
-    bool valid = parseInput(input, firstNumber, operatorChar, secondNumber);
+  // Parse first number
+  *num1 = strtol(ptr, &endptr, 10);
+  if (ptr == endptr) return 0; // No number found
 
-    if (valid) {
-      float result = calculate(firstNumber, operatorChar, secondNumber);
-      Serial.println(result); // Send the result back
-    } else {
-      Serial.println("ERROR: invalid input"); // Send error message
-    }
-  }
-}
+  ptr = skip_spaces(endptr);
 
-// Parses the input string and extracts two numbers and an operator
-bool parseInput(String input, int &firstNumber, char &operatorChar, int &secondNumber) {
-  char buffer[50];
-  input.toCharArray(buffer, sizeof(buffer)); // Copy String into a C-style array
-
-  char *ptr = buffer;
-  ptr = skipSpaces(ptr);                     // Skip spaces before first number
-
-  // Read first number
-  char *endPtr;
-  firstNumber = strtol(ptr, &endPtr, 10);     // Convert first number
-  if (ptr == endPtr) return false;            // No number found
-
-  ptr = skipSpaces(endPtr);                   // Skip spaces after first number
-
-  // Read operator
-  operatorChar = *ptr;
-  if (operatorChar != '+' && operatorChar != '-' && operatorChar != '*' && operatorChar != '/') {
-    return false;                             // Invalid operator
-  }
+  // Parse operator
+  *op = *ptr;
+  if (*op != '+' && *op != '-' && *op != '*' && *op != '/') return 0;
 
   ptr++;
-  ptr = skipSpaces(ptr);                      // Skip spaces after operator
+  ptr = skip_spaces(ptr);
 
-  // Read second number
-  secondNumber = strtol(ptr, &endPtr, 10);
-  if (ptr == endPtr) return false;             // No second number found
+  // Parse second number
+  *num2 = strtol(ptr, &endptr, 10);
+  if (ptr == endptr) return 0; // No second number found
 
-  // Check that nothing extra follows
-  ptr = skipSpaces(endPtr);
-  if (*ptr != '\0') return false;              // Extra junk detected after second number
+  ptr = skip_spaces(endptr);
+  if (*ptr != '\0') return 0; // Unexpected characters
 
-  return true; // Parsing was successful
+  return 1; // Valid input
 }
 
-// Calculates the result based on two numbers and an operator
-float calculate(int num1, char op, int num2) {
+// Perform calculation
+float calculate(int a, char op, int b) {
   switch (op) {
-    case '+': return num1 + num2;
-    case '-': return num1 - num2;
-    case '*': return num1 * num2;
-    case '/': 
-      if (num2 == 0) return 0; // Division by zero protection
-      return (float)num1 / num2;
-    default: 
-      return 0; // Should never happen because parsing already checked
+    case '+': return (float)(a + b);
+    case '-': return (float)(a - b);
+    case '*': return (float)(a * b);
+    case '/': return b != 0 ? (float)a / b : 0.0;
+    default:  return 0.0;
+  }
+}
+
+void loop() {
+  static char buffer[64];
+  static int index = 0;
+
+  // Read incoming bytes
+  while (Serial.available() > 0) {
+    char c = Serial.read();
+
+    if (c == '\n' || c == '\r') {
+      buffer[index] = '\0'; // Null-terminate string
+
+      // Reset index for next input
+      index = 0;
+
+      int num1, num2;
+      char op;
+      if (parse_input(buffer, &num1, &op, &num2)) {
+        float result = calculate(num1, op, num2);
+        char resultBuffer[32];
+        dtostrf(result, 0, 2, resultBuffer); // Convert float to string with 2 decimal digits
+        Serial.println(resultBuffer);
+      } else {
+        Serial.println("ERROR: invalid input");
+      }
+    } else {
+      // Store character in buffer if there's space
+      if (index < sizeof(buffer) - 1) {
+        buffer[index++] = c;
+      }
+    }
   }
 }
