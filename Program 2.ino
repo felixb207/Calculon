@@ -1,4 +1,5 @@
-// Arduino Calculator Server
+// Arduino Calculator - Arduino Side
+// Tested on Arduino Nano
 // Receives math operations over Serial, calculates and returns result
 
 void setup() {
